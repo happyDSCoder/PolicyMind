@@ -5,7 +5,7 @@ from langchain_neo4j import Neo4jGraph, Neo4jVector
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 
 load_dotenv()
 
@@ -64,13 +64,16 @@ retriever = vector_store.as_retriever(search_kwargs={"k": 5})
 # -------------------------
 # LCEL Chain
 # -------------------------
-chain = (
-    {
-        "context": (lambda x: x["input"]) | retriever,
-        "input": RunnablePassthrough()
-    }
-    | prompt
-    | llm
+chain = RunnableParallel(
+    docs=lambda x: retriever.invoke(x["input"]),
+    answer=(
+        {
+            "context": lambda x: retriever.invoke(x["input"]),
+            "input": RunnablePassthrough()
+        }
+        | prompt
+        | llm
+    )
 )
 # -------------------------
 # Helper Function
@@ -78,22 +81,23 @@ chain = (
 def ask_question(question: str) -> dict:
     result = chain.invoke({"input": question})
 
-    # LCEL returns AIMessage → extract text safely
-    answer = result.content if hasattr(result, "content") else str(result)
+    docs = result["docs"]
+    answer = result["answer"]
 
-    # Optional: try to extract source metadata if available
-    sources = []
-
-    try:
-        docs = retriever.get_relevant_documents(question)
-        sources = list({
-            doc.metadata.get("source", "")
-            for doc in docs
-        })
-    except Exception:
-        pass
+    sources = list({
+        d.metadata.get("source", "")
+        for d in docs
+    })
 
     return {
-        "answer": answer,
-        "sources": sources
+        "answer": answer.content if hasattr(answer, "content") else str(answer),
+        "sources": sources,
+        "context": [
+            {
+                "text": d.page_content,
+                "source": d.metadata.get("source"),
+                "index": d.metadata.get("index")
+            }
+            for d in docs
+        ]
     }
