@@ -2,7 +2,7 @@
 
 A Graph-RAG chatbot that lets you upload internal policy documents and ask natural language questions about them — such as *"What do I need to consider before launching a new vendor relationship?"*
 
-Built with LangChain, Neo4j, and FastAPI. React frontend coming soon.
+Built with LangChain, Neo4j, Ollama, and FastAPI. React frontend coming soon.
 
 ---
 
@@ -18,21 +18,66 @@ Standard RAG retrieves isolated text chunks. PolicyMind uses a **knowledge graph
 - Automatic extraction of entities and relationships into Neo4j
 - Natural language Q&A grounded in your documents
 - Source citations for every answer
+- Runs fully locally — no API key required
 - Dynamic: swap in any document set without code changes
 
 ---
-### How it works
+
+## How it works
 
 1. Documents are ingested and split into chunks.
-2. Each chunk is embedded and stored in :contentReference[oaicite:1]{index=1}.
-3. A vector similarity search retrieves the most relevant chunks.
-4. The system optionally expands context using graph relationships between chunks and entities.
-5. The final context is passed to a language model via :contentReference[oaicite:2]{index=2}.
+2. Each chunk is embedded using Ollama (`nomic-embed-text`) and stored as a node in Neo4j.
+3. Chunks are linked sequentially via `NEXT` relationships and grouped under a `Document` node.
+4. At query time, a vector similarity search retrieves the most relevant chunks.
+5. The context is passed to a local LLM via Ollama (`qwen3:8b`), orchestrated by LangChain.
 6. The model generates a grounded answer with references to the source documents.
 
-The LLM backend (e.g. via :contentReference[oaicite:3]{index=3}) ensures that responses are generated locally or via configurable providers.
+---
 
-The API layer is built with :contentReference[oaicite:4]{index=4}, and the frontend is planned using :contentReference[oaicite:5]{index=5}.
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Ingestion["Ingestion Pipeline"]
+        PDF["PDF / Text File"]
+        SPLIT["Text Splitter\nRecursiveCharacterTextSplitter"]
+        EMBED_I["Ollama Embeddings\nnomic-embed-text"]
+        PDF --> SPLIT --> EMBED_I
+    end
+
+    subgraph Neo4j["Neo4j Knowledge Graph"]
+        DOC["Document Node"]
+        CHUNK1["Chunk Node 0"]
+        CHUNK2["Chunk Node 1"]
+        CHUNK3["Chunk Node n"]
+        DOC -->|HAS_CHUNK| CHUNK1
+        DOC -->|HAS_CHUNK| CHUNK2
+        DOC -->|HAS_CHUNK| CHUNK3
+        CHUNK1 -->|NEXT| CHUNK2
+        CHUNK2 -->|NEXT| CHUNK3
+    end
+
+    EMBED_I -->|store embedding + text| Neo4j
+
+    subgraph Query["Query Pipeline"]
+        USER["User Question"]
+        EMBED_Q["Ollama Embeddings\nnomic-embed-text"]
+        RETRIEVER["Vector Similarity Search\nTop-k Chunks"]
+        LLM["Ollama LLM\nqwen3:8b"]
+        ANSWER["Answer + Sources"]
+        USER --> EMBED_Q --> RETRIEVER --> LLM --> ANSWER
+    end
+
+    Neo4j -->|retrieve relevant chunks| RETRIEVER
+
+    subgraph API["API Layer"]
+        FASTAPI["FastAPI\nPOST /ask\nPOST /upload"]
+    end
+
+    USER -.->|HTTP Request| FASTAPI
+    FASTAPI -.-> USER
+    FASTAPI --> Query
+```
 
 ## Tech Stack
 
@@ -40,7 +85,8 @@ The API layer is built with :contentReference[oaicite:4]{index=4}, and the front
 |---|---|
 | Orchestration | LangChain |
 | Graph Database | Neo4j |
-| Embeddings | OpenAI / HuggingFace |
+| Embeddings | Ollama (nomic-embed-text) |
+| LLM | Ollama (qwen3:8b) |
 | Backend API | FastAPI |
 | Frontend | React (in progress) |
 
@@ -69,7 +115,12 @@ policymind/
 
 - Python 3.11+
 - Docker and Docker Compose
-- OpenAI API key (or local HuggingFace model)
+- Ollama with `nomic-embed-text` and `qwen3:8b` pulled
+
+```bash
+ollama pull nomic-embed-text
+ollama pull qwen3:8b
+```
 
 ### Setup
 
@@ -78,11 +129,12 @@ git clone https://github.com/your-username/policymind.git
 cd policymind
 
 cp .env.example .env
-# Add your API keys to .env
+# Edit .env and set your Neo4j password
 
-docker compose up -d        # Starts Neo4j
+docker compose up -d
 pip install -r requirements.txt
-python scripts/ingest.py --file docs/example_policy.pdf
+
+PYTHONPATH=. python scripts/ingest.py --file docs/example_policy.pdf --name "Example Policy"
 uvicorn backend.api.main:app --reload
 ```
 
@@ -102,20 +154,22 @@ curl -X POST http://localhost:8000/ask \
 ```
 
 ---
+
 ## Roadmap
 
 ### Core RAG System
 - [x] Document ingestion pipeline (PDF / Text → Chunking → Neo4j storage)
+- [x] Graph structure with sequential chunk linking (`NEXT` relationships)
 - [x] Vector-based retrieval with Neo4j (embedding similarity search)
 - [x] LLM-based question answering via RAG pipeline
 - [ ] Upgrade to true Graph-RAG (relationship-aware retrieval + multi-hop traversal)
-  - [ ] Use Neo4j relationships (e.g. NEXT, RELATED, HAS_ENTITY) during retrieval
+  - [ ] Use Neo4j relationships (e.g. `NEXT`, `RELATED`, `HAS_ENTITY`) during retrieval
   - [ ] Add graph-based context expansion after vector search
   - [ ] Implement hybrid retrieval (vector + graph traversal)
   - [ ] Add reranking of expanded context for better answer quality
 
 ### Backend API
-- [ ] FastAPI Q&A endpoint (production-ready API layer)
+- [ ] FastAPI Q&A endpoint (production-ready)
 - [ ] Structured response format (answer + sources + context)
 - [ ] Streaming responses for real-time output
 
@@ -125,14 +179,15 @@ curl -X POST http://localhost:8000/ask \
 - [ ] Source highlighting and traceable answers
 
 ### System Features
-- [ ] Multi-tenant support (separate knowledge graphs per tenant)
-- [ ] Authentication & role-based access control
+- [ ] Multi-tenant support
+- [ ] Authentication and role-based access control
 - [ ] Document versioning and updates
 
-### Infrastructure & Quality
+### Infrastructure
 - [ ] Dockerized full-stack setup
-- [ ] CI/CD pipeline for backend
-- [ ] Observability (logging + tracing for RAG pipeline)
+- [ ] CI/CD pipeline
+- [ ] Observability (logging and tracing for RAG pipeline)
+
 ---
 
 ## License
