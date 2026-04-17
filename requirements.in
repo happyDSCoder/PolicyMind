@@ -1,0 +1,10 @@
+langchain
+langchain-core
+langchain-community
+langchain-neo4j
+langchain-ollama
+neo4j
+python-dotenv
+numpy
+tiktoken
+httpx
