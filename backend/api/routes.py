@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from backend.models.schemas import QuestionRequest, AnswerResponse
 from backend.core.rag import ask_question
-from backend.graph.ingestor import ingest_document
+from scripts.ingestor import ingest_document
 import tempfile, os
 
 router = APIRouter()
