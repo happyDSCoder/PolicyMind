@@ -21,6 +21,18 @@ Standard RAG retrieves isolated text chunks. PolicyMind uses a **knowledge graph
 - Dynamic: swap in any document set without code changes
 
 ---
+### How it works
+
+1. Documents are ingested and split into chunks.
+2. Each chunk is embedded and stored in :contentReference[oaicite:1]{index=1}.
+3. A vector similarity search retrieves the most relevant chunks.
+4. The system optionally expands context using graph relationships between chunks and entities.
+5. The final context is passed to a language model via :contentReference[oaicite:2]{index=2}.
+6. The model generates a grounded answer with references to the source documents.
+
+The LLM backend (e.g. via :contentReference[oaicite:3]{index=3}) ensures that responses are generated locally or via configurable providers.
+
+The API layer is built with :contentReference[oaicite:4]{index=4}, and the frontend is planned using :contentReference[oaicite:5]{index=5}.
 
 ## Tech Stack
 
