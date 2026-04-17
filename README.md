@@ -90,16 +90,37 @@ curl -X POST http://localhost:8000/ask \
 ```
 
 ---
-
 ## Roadmap
 
-- [x] Document ingestion pipeline
-- [x] Graph-based retrieval with Neo4j
-- [x] FastAPI Q&A endpoint
-- [ ] React frontend with document upload UI
-- [ ] Multi-tenant support
-- [ ] Authentication
+### Core RAG System
+- [x] Document ingestion pipeline (PDF / Text → Chunking → Neo4j storage)
+- [x] Vector-based retrieval with Neo4j (embedding similarity search)
+- [x] LLM-based question answering via RAG pipeline
+- [ ] Upgrade to true Graph-RAG (relationship-aware retrieval + multi-hop traversal)
+  - [ ] Use Neo4j relationships (e.g. NEXT, RELATED, HAS_ENTITY) during retrieval
+  - [ ] Add graph-based context expansion after vector search
+  - [ ] Implement hybrid retrieval (vector + graph traversal)
+  - [ ] Add reranking of expanded context for better answer quality
 
+### Backend API
+- [ ] FastAPI Q&A endpoint (production-ready API layer)
+- [ ] Structured response format (answer + sources + context)
+- [ ] Streaming responses for real-time output
+
+### Frontend
+- [ ] React frontend with document upload UI
+- [ ] Chat interface for querying policies
+- [ ] Source highlighting and traceable answers
+
+### System Features
+- [ ] Multi-tenant support (separate knowledge graphs per tenant)
+- [ ] Authentication & role-based access control
+- [ ] Document versioning and updates
+
+### Infrastructure & Quality
+- [ ] Dockerized full-stack setup
+- [ ] CI/CD pipeline for backend
+- [ ] Observability (logging + tracing for RAG pipeline)
 ---
 
 ## License
